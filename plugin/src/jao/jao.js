@@ -1,11 +1,11 @@
 /**
  * Represents the json-api structured object
  *
- * @param data
+ * @param jaoPlainObject
  * @constructor
  */
-export default function JAO(data) {
-    this.data = data;
+export default function JAO(jaoPlainObject) {
+    this.data = jaoPlainObject.data;
 }
 
 export function JAOData() {

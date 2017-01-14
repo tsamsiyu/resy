@@ -47,10 +47,11 @@ JAOPicker.prototype.getAttributes = function () {
     }
 };
 
+// TODO: need refactoring, recognize and reuse some repeating places
 JAOPicker.prototype.getRelationships = function () {
     const relNames = this.spec.relatinoships;
+    const rels = {};
     if (_.isArray(relNames) && !_.isEmpty(relNames)) {
-        const rels = {};
         relNames.forEach((relName) => {
             const rel = _.get(this.mock, relName);
             if (_.isArray(rel)) {
@@ -70,6 +71,30 @@ JAOPicker.prototype.getRelationships = function () {
                 }};
             }
         });
-        return rels;
+    } else {
+        _.forEach(this.mock, (value, key) => {
+            if (_.isArray(value) && !_.isEmpty(value)) {
+                const valueRels = [];
+                _.forEach(value, (item) => {
+                    if (_.isObjectLike(item) && item.id) {
+                        valueRels.push({
+                            id: item.id,
+                            type: key
+                        });
+                    }
+                });
+                if (_.size(valueRels) === _.size(value)) {
+                    rels[key] = {data: valueRels};
+                }
+            } else if (_.isObjectLike(value) && value.id) {
+                rels[key] = {
+                    data: {
+                        id: value.id,
+                        type: key
+                    }
+                };
+            }
+        });
     }
+    return rels;
 };

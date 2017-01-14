@@ -58,9 +58,9 @@ JAOSpec.prototype.serializeSingle = function (mock) {
     plainObject.data.id = picker.getId();
     plainObject.data.type = picker.getType();
     plainObject.data.attributes = picker.getAttributes();
-    const mainRelationships = picker.getRelationships();
-    if (mainRelationships) {
-        plainObject.data.relationships = mainRelationships;
+    const relationships = picker.getRelationships();
+    if (_.isObjectLike(relationships) && !_.isEmpty(relationships)) {
+        plainObject.data.relationships = relationships;
     }
     if (_.isArray(this.included)) {
         this.included.forEach((relName) => {
