@@ -1,8 +1,18 @@
 import _ from 'lodash';
+import JAOSpec from 'jao/jao-spec';
 
-export default function JAOPicker(spec, mock) {
+/**
+ * TODO: we should have possibility to use this class independent on Spec and Manager
+ *
+ * @param spec Instructions to pick data
+ * @param mock Data to pick from
+ * @param manager
+ * @constructor
+ */
+export default function JAOPicker(spec, mock, manager = null) {
     this.spec = spec;
     this.mock = mock;
+    this.manager = manager;
 }
 
 JAOPicker.prototype.getType = function () {
@@ -10,25 +20,46 @@ JAOPicker.prototype.getType = function () {
 };
 
 JAOPicker.prototype.getRelationshipType = function (relName) {
-    if (typeof this.spec.relationshipsSpecs === 'object') {
+    const relSpec = this.getRelationshipSpec(relName);
+    if (relSpec) {
+        if (typeof relSpec === 'object') {
+            return relSpec.type; // expects serializer
+        } else {
+            return relSpec;
+        }
+    }
+    return relName;
+};
+
+JAOPicker.prototype.getRelationshipSpec = function (relName) {
+    if (_.isObjectLike(this.spec.relationshipsSpecs)) {
         if (this.spec.relationshipsSpecs[relName]) {
-            const typeValue = this.spec.relationshipsSpecs[relName];
-            if (typeof typeValue === 'object') {
-                return typeValue.type; // expects serializer
-            } else {
-                return typeValue;
-            }
+            return this.spec.relationshipsSpecs[relName];
         }
     }
 };
 
-JAOPicker.prototype.getRelationshipSpec = function (relName) {
-    const relType = this.getRelationshipType(relName);
-    return this.spec.manager.getSpec(relType);
+// TODO: need to review, probably it's an architecture problem [IMPORTANT]
+JAOPicker.prototype.getRelationshipSpecInstance = function (relName) {
+    const relSpec = this.getRelationshipSpec(relName);
+    if (typeof relSpec === 'object') {
+        return relSpec;
+    } else if (typeof relSpec === 'string' && this.manager) {
+        return this.manager.getInstance(relSpec);
+    } else if (this.manager) {
+        if (this.manager.has(relName)) {
+            return this.manager.getInstance(relName);
+        } else {
+            return this.manager.create(relName);
+        }
+    } else {
+        return new JAOSpec(relName, null, null);
+    }
 };
 
 JAOPicker.prototype.getRelationshipPicker = function (relName, mock) {
-    return this.spec.getPicker(mock);
+    const relSpec = this.getRelationshipSpecInstance(relName);
+    return relSpec.getPicker(mock);
 };
 
 JAOPicker.prototype.getId = function () {
@@ -36,7 +67,7 @@ JAOPicker.prototype.getId = function () {
 };
 
 JAOPicker.prototype.getAttributes = function () {
-    if (this.spec.attributes) {
+    if (_.isArray(this.spec.attributes)) {
         return _.pick(this.mock, this.spec.attributes, []);
     } else {
         return _.pickBy(this.mock, (value, key) => {
@@ -48,8 +79,9 @@ JAOPicker.prototype.getAttributes = function () {
 };
 
 // TODO: need refactoring, recognize and reuse some repeating places
+// TODO: maybe returned data should not be in json-api view?
 JAOPicker.prototype.getRelationships = function () {
-    const relNames = this.spec.relatinoships;
+    const relNames = this.spec.relationships;
     const rels = {};
     if (_.isArray(relNames) && !_.isEmpty(relNames)) {
         relNames.forEach((relName) => {

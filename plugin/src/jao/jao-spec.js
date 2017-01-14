@@ -16,7 +16,7 @@ JAOSpec.pickerClass = JAOPicker;
 
 JAOSpec.prototype.getPicker = function (mock) {
     const pickerClass = this.constructor.pickerClass;
-    return new pickerClass(this, mock);
+    return new pickerClass(this, mock, this.manager);
 };
 
 JAOSpec.prototype.attributesOnly = function (list) {
@@ -24,6 +24,7 @@ JAOSpec.prototype.attributesOnly = function (list) {
     return this;
 };
 
+// TODO: should not forget the initialized attributes
 JAOSpec.prototype.attributesExclude = function (list) {
     this.attributes = _.difference(this.attributes, list);
     return this;
@@ -34,6 +35,7 @@ JAOSpec.prototype.relationshipsOnly = function (list) {
     return this;
 };
 
+// TODO: should not forget the initialized relationships
 JAOSpec.prototype.relationshipsExclude = function (list) {
     this.relationships = _.difference(this.relationships, list);
     return this;

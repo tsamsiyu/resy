@@ -8,7 +8,20 @@ ResourceManager.prototype.register = function (type, spec) {
     return this;
 };
 
-ResourceManager.prototype.get = function (type) {
+ResourceManager.prototype.getInstance = function (type) {
     const specClass = this.specClass;
-    return new specClass(this, type, this.specs[type]);
+    return new specClass(type, this, this.specs[type]);
+};
+
+ResourceManager.prototype.get = function (type) {
+    return this.specs[type];
+};
+
+ResourceManager.prototype.has = function (type) {
+    return Boolean(this.specs[type]);
+};
+
+ResourceManager.prototype.create = function (type, spec) {
+    const specClass = this.specClass;
+    return new specClass(type, this, spec);
 };

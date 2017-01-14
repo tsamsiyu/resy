@@ -74,6 +74,7 @@ factory.register('comment', (filler) => {
 });
 
 factory.get('user')
+    .values('email', 'planhton@yandex.ru')
     .with(':all', {comments: [0, 10]})
     .without('posts')
     .pick();
