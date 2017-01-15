@@ -1,83 +1,66 @@
-import _ from 'lodash';
-import JAO from 'jao/jao';
+import get from 'lodash/get';
+import difference from 'lodash/difference';
 import JAOPicker from 'jao/jao-picker';
 
-export default function JAOSpec(type, manager = null, specification = null) {
-    this.manager = manager;
+export default function JAOSpec(type, specHash = null) {
+    if (typeof type !== 'string') {
+        throw new Error('Type of jao spec must be a string');
+    }
     this.type = type;
-    this.id = _.get(specification, 'id', 'id');
-    this.attributes = _.get(specification, 'attributes', null); // null allows all the attributes
-    this.relationships = _.get(specification, 'relationships', null); // null allows all the relationships
-    this.relationshipsSpecs = _.get(specification, 'relationshipsSpecs', null);
-    this.included = _.get(specification, 'included', null);
+    this.originalSpec = specHash;
+    this.id = get(specHash, 'id', 'id');
+    this.attributes = get(specHash, 'attributes', null); // null allows all the attributes
+    this.relationships = get(specHash, 'relationships', null); // null allows all the relationships
+    this.insideSpecs = get(specHash, 'insideSpecs', null);
+    this.included = get(specHash, 'included', []);
+    this.ignored = get(specHash, 'ignored', []);
 }
 
-JAOSpec.pickerClass = JAOPicker;
-
-JAOSpec.prototype.getPicker = function (mock) {
-    const pickerClass = this.constructor.pickerClass;
-    return new pickerClass(this, mock, this.manager);
+/**
+ * @param spec
+ * @returns {JAOSpec}
+ */
+JAOSpec.create = function (spec) {
+    const type = spec.type;
+    delete spec.type;
+    return new this(type, spec);
 };
 
-JAOSpec.prototype.attributesOnly = function (list) {
-    this.attributes = list;
-    return this;
+/**
+ * Bind particular picker to spec
+ * @returns {JAOPicker}
+ */
+JAOSpec.createPicker = function (mock, spec, manager = null) {
+    return new JAOPicker(mock, spec, manager);
 };
 
-// TODO: should not forget the initialized attributes
-JAOSpec.prototype.attributesExclude = function (list) {
-    this.attributes = _.difference(this.attributes, list);
-    return this;
+JAOSpec.prototype.createPicker = function (mock, manager = null) {
+    return this.constructor.createPicker(mock, this, manager)
 };
 
-JAOSpec.prototype.relationshipsOnly = function (list) {
-    this.relationships = list;
-    return this;
+JAOSpec.prototype.isEmpty = function () {
+    const origin = this.originalSpec;
+    return typeof origin !== 'object' ||
+            !(origin.id ||
+            origin.attributes ||
+            origin.relationships ||
+            origin.insideSpecs ||
+            origin.included ||
+            origin.ignored);
 };
 
-// TODO: should not forget the initialized relationships
-JAOSpec.prototype.relationshipsExclude = function (list) {
-    this.relationships = _.difference(this.relationships, list);
-    return this;
+JAOSpec.prototype.getAttributes = function () {
+    return difference(this.attributes, this.ignored);
 };
 
-JAOSpec.prototype.includedOnly = function (list) {
-    this.included = list;
-    return this;
+JAOSpec.prototype.getRelationships = function () {
+    return difference(this.relationships, this.ignored);
 };
 
-JAOSpec.prototype.serialize = function (mock) {
-    if (mock instanceof Array) {
-        return this.serializeCollection(mock);
-    } else {
-        return this.serializeSingle(mock);
-    }
+JAOSpec.prototype.isIgnored = function (key) {
+    return this.ignored.includes(key);
 };
 
-JAOSpec.prototype.serializeSingle = function (mock) {
-    const picker = this.getPicker(mock);
-    const plainObject = {data: {}, included: []};
-    plainObject.data.id = picker.getId();
-    plainObject.data.type = picker.getType();
-    plainObject.data.attributes = picker.getAttributes();
-    const relationships = picker.getRelationships();
-    if (_.isObjectLike(relationships) && !_.isEmpty(relationships)) {
-        plainObject.data.relationships = relationships;
-    }
-    if (_.isArray(this.included)) {
-        this.included.forEach((relName) => {
-            const relMock = _.get(mock, relName);
-            if (relMock) {
-                const relType = picker.getRelationshipType(relName);
-                const relSpec = this.manager.getSpec(relType);
-                const relPlainObject = relSpec.serialize(relMock);
-                plainObject.included.push(relPlainObject);
-            }
-        });
-    }
-    return new JAO(plainObject);
+JAOSpec.prototype.isId = function (key) {
+    return String(key) === String(this.id);
 };
-
-JAOSpec.prototype.serializeCollection = function (mocks) {
-};
-

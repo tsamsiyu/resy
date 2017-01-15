@@ -1,65 +1,118 @@
 import _ from 'lodash';
 import JAOSpec from 'jao/jao-spec';
+import ResourceManager from 'resource-manager';
+import {definedMap, hashedMap, isScalar} from 'helpers';
 
 /**
- * TODO: we should have possibility to use this class independent on Spec and Manager
- *
- * @param spec Instructions to pick data
- * @param mock Data to pick from
- * @param manager
+ * @param {Object} mock Data to pick from
+ * @param {JAOSpec} spec Instructions to pick data
+ * @param {ResourceManager|null} manager
+ * @param options
  * @constructor
  */
-export default function JAOPicker(spec, mock, manager = null) {
-    this.spec = spec;
+export default function JAOPicker(mock, spec, manager = null, options = null) {
     this.mock = mock;
     this.manager = manager;
+    this.spec = spec;
+    this.options = options;
 }
+
+JAOPicker.create = function (mock, type, specHash = null, manager = null) {
+    const spec = new JAOSpec(type, specHash);
+    return new this(mock, spec, manager);
+};
+
+JAOPicker.prototype.isValid = function () {
+    return _.has(this.mock, this.spec.id);
+};
+
+/**
+ * case 1
+ *      - relationship spec
+ *      + manager
+ *      manager have spec for `relName`
+ *      CONCLUSION: use spec from manager
+ * case 2
+ *      - relationship spec
+ *      + manager
+ *      manager don't have spec by relName
+ *      CONCLUSION: if option `managerStoreOnly` is true or undefined then throw error, otherwise - create empty resource
+ * case 3
+ *      - relationship spec
+ *      - manager
+ *      CONCLUSION: create empty resource
+ * case 4
+ *      + relationship spec
+ *      relationship spec is object
+ *      CONCLUSION: use relationship spec
+ * case 5
+ *      + relationship spec
+ *      + manager
+ *      relationship spec is string
+ *      manager have spec for that type
+ *      CONCLUSION: have use spec from manager
+ * case 6
+ *      + relationship spec
+ *      + manager
+ *      relationship spec is string
+ *      manager don't have spec for that type
+ *      CONCLUSION: if option `managerStoreOnly` is true or undefined then throw error, otherwise - create empty resource
+ * case 7
+ *      + relationship spec
+ *      - manager
+ *      CONCLUSION: create empty spec
+ *
+ * @param {String} relName
+ * @returns {JAOSpec}
+ */
+JAOPicker.prototype.getRelationshipSpec = function (relName) {
+    const relSpec = _.get(this.spec.insideSpecs, relName, null);
+    if (relSpec === null) {
+        return this.provideRelationshipSpec(relName, relName);
+    } else {
+        const specType = typeof relSpec;
+        if (relSpec instanceof JAOSpec) {
+            return relSpec.type;
+        } else if (specType === 'string') {
+            return this.provideRelationshipSpec(relName, relSpec);
+        } else {
+            throw new Error(`Unexpected type of relationship spec '${relName}' : '${relSpec}'`);
+        }
+    }
+};
+
+JAOPicker.prototype.provideRelationshipSpec = function (relName, relType) {
+    if (this.manager instanceof ResourceManager) {
+        if (this.manager.hasSpec(relType)) {
+            return this.manager.getSpec(relType);
+        } else {
+            const managerStoreOnly = _.get(this.options, 'managerStoreOnly', undefined);
+            if (managerStoreOnly === true || managerStoreOnly === undefined) {
+                throw new Error(`Spec '${relType}' was not found for '${relName}' relationship`);
+            } else {
+                return this.createEmptySpec(relType);
+            }
+        }
+    } else {
+        return this.createEmptySpec(relType);
+    }
+};
+
+JAOPicker.prototype.createEmptySpec = function (type) {
+    return new JAOSpec(type);
+};
+
+/**
+ * @param {String} relName
+ * @param {Object} element
+ */
+JAOPicker.prototype.getElementPicker = function (relName, element) {
+    const relSpec = this.getRelationshipSpec(relName);
+    return relSpec.createPicker(element, this.manager);
+};
 
 JAOPicker.prototype.getType = function () {
     return this.spec.type;
-};
-
-JAOPicker.prototype.getRelationshipType = function (relName) {
-    const relSpec = this.getRelationshipSpec(relName);
-    if (relSpec) {
-        if (typeof relSpec === 'object') {
-            return relSpec.type; // expects serializer
-        } else {
-            return relSpec;
-        }
-    }
-    return relName;
-};
-
-JAOPicker.prototype.getRelationshipSpec = function (relName) {
-    if (_.isObjectLike(this.spec.relationshipsSpecs)) {
-        if (this.spec.relationshipsSpecs[relName]) {
-            return this.spec.relationshipsSpecs[relName];
-        }
-    }
-};
-
-// TODO: need to review, probably it's an architecture problem [IMPORTANT]
-JAOPicker.prototype.getRelationshipSpecInstance = function (relName) {
-    const relSpec = this.getRelationshipSpec(relName);
-    if (typeof relSpec === 'object') {
-        return relSpec;
-    } else if (typeof relSpec === 'string' && this.manager) {
-        return this.manager.getInstance(relSpec);
-    } else if (this.manager) {
-        if (this.manager.has(relName)) {
-            return this.manager.getInstance(relName);
-        } else {
-            return this.manager.create(relName);
-        }
-    } else {
-        return new JAOSpec(relName, null, null);
-    }
-};
-
-JAOPicker.prototype.getRelationshipPicker = function (relName, mock) {
-    const relSpec = this.getRelationshipSpecInstance(relName);
-    return relSpec.getPicker(mock);
 };
 
 JAOPicker.prototype.getId = function () {
@@ -68,65 +121,61 @@ JAOPicker.prototype.getId = function () {
 
 JAOPicker.prototype.getAttributes = function () {
     if (_.isArray(this.spec.attributes)) {
-        return _.pick(this.mock, this.spec.attributes, []);
+        return _.pick(this.mock, this.spec.getAttributes(), []);
     } else {
         return _.pickBy(this.mock, (value, key) => {
-            const valueType = typeof value;
-            const isScalar = valueType === 'string' || valueType === 'number';
-            return isScalar && key !== this.spec.id;
+            return isScalar(value) &&
+                !this.spec.isId(key) &&
+                !this.spec.isIgnored(key);
         });
     }
 };
 
-// TODO: need refactoring, recognize and reuse some repeating places
-// TODO: maybe returned data should not be in json-api view?
-JAOPicker.prototype.getRelationships = function () {
+JAOPicker.prototype.getElementObjectIndex = function (name, value) {
+    if (_.isObjectLike(value)) {
+        const relPicker = this.getElementPicker(name, value);
+        if (relPicker.isValid()) {
+            return {
+                type: relPicker.getType(),
+                id: relPicker.getId()
+            }
+        }
+    }
+};
+
+JAOPicker.prototype.getElementIndex = function (relName, relValue) {
+    if (_.isArray(relValue)) {
+        const rels = definedMap(relValue, (relItem) => {
+            return this.getElementObjectIndex(relName, relItem);
+        });
+        if (_.size(rels) === _.size(relValue)) {
+            return rels;
+        }
+    } else {
+        return this.getElementObjectIndex(relName, relValue);
+    }
+};
+
+JAOPicker.prototype.getRelationshipIndex = function (relName) {
+    const relValue = this.mock[relName];
+    return this.getElementIndex(relName, relValue);
+};
+
+JAOPicker.prototype.getRelationshipsIndexes = function () {
     const relNames = this.spec.relationships;
-    const rels = {};
-    if (_.isArray(relNames) && !_.isEmpty(relNames)) {
-        relNames.forEach((relName) => {
-            const rel = _.get(this.mock, relName);
-            if (_.isArray(rel)) {
-                rels[relName] = {data: []};
-                rel.map((relItem) => {
-                    const relPicker = this.getRelationshipPicker(relName, relItem);
-                    rels[relName].data.push({
-                        type: relPicker.getType(),
-                        id: relPicker.getId()
-                    });
-                });
-            } else if (_.isObjectLike(rel)) {
-                const relPicker = this.getRelationshipPicker(relName, rel);
-                rels[relName] = {data: {
-                    type: relPicker.getType(),
-                    id: relPicker.getId(),
-                }};
+    if (_.isArray(relNames)) {
+        return hashedMap(relNames, (relName) => {
+            const relValue = this.getRelationshipIndex(relName);
+            if (relValue) {
+                return [relName, relValue];
             }
         });
     } else {
-        _.forEach(this.mock, (value, key) => {
-            if (_.isArray(value) && !_.isEmpty(value)) {
-                const valueRels = [];
-                _.forEach(value, (item) => {
-                    if (_.isObjectLike(item) && item.id) {
-                        valueRels.push({
-                            id: item.id,
-                            type: key
-                        });
-                    }
-                });
-                if (_.size(valueRels) === _.size(value)) {
-                    rels[key] = {data: valueRels};
-                }
-            } else if (_.isObjectLike(value) && value.id) {
-                rels[key] = {
-                    data: {
-                        id: value.id,
-                        type: key
-                    }
-                };
+        return hashedMap(this.mock, (value, relName) => {
+            const relValue = this.getElementIndex(relName, value);
+            if (relValue) {
+                return [relName, relValue];
             }
         });
     }
-    return rels;
 };

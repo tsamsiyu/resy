@@ -1,40 +1,17 @@
 import chai from 'chai';
-import faker from 'faker';
+import {generateUser, generateProfile, generatePost} from './factories';
 
-import JAOSpec from 'jao/jao-spec';
+import JAOResource from 'jao/jao-resource';
 
 const expect = chai.expect;
 
-const generatePost = () => {
-    return {
-        id: faker.random.uuid(),
-        title: faker.name.title()
-    }
-};
-
-const generateProfile = () => {
-    return {
-        id: faker.random.uuid(),
-        name: faker.name.firstName(),
-        surname: faker.name.lastName()
-    }
-};
-
-const generateUser = () => {
-    return {
-        id: faker.random.uuid(),
-        email: faker.internet.email(),
-        passwordHash: faker.random.uuid(),
-    };
-};
-
-describe("Serialization", () => {
-    describe('without predefined specification', () => {
+describe("JAOResource", () => {
+    describe('serialize data without predefined specification', () => {
         it('must serialize plain proper object', () => {
             const user = generateUser();
             user.profile = generateProfile();
             user.posts = [generatePost(), generatePost()];
-            const serializedUser = (new JAOSpec('users')).serialize(user);
+            const serializedUser = JAOResource.create('users').serialize(user);
             expect(serializedUser).to.deep.equal({
                 data: {
                     id: user.id,
@@ -64,7 +41,7 @@ describe("Serialization", () => {
             const user = generateUser();
             user.profile = generateProfile();
             delete user.profile.id;
-            const serializedUser = (new JAOSpec('users')).serialize(user);
+            const serializedUser = JAOResource.create('users').serialize(user);
             expect(serializedUser).to.deep.equal({
                 data: {
                     id: user.id,
@@ -80,7 +57,7 @@ describe("Serialization", () => {
         it("should not serialize embed collection if at least one of them is invalid", () => {
             const user = generateUser();
             user.posts = [generatePost(), generatePost(), 7];
-            const serializedUser = (new JAOSpec('users')).serialize(user);
+            const serializedUser = JAOResource.create('users').serialize(user);
             expect(serializedUser).to.deep.equal({
                 data: {
                     id: user.id,
@@ -97,9 +74,9 @@ describe("Serialization", () => {
             const user = generateUser();
             user.profile = generateProfile();
             user.posts = [generatePost()];
-            const serializedUser = (new JAOSpec('users'))
-                .attributesOnly(['email'])
-                .relationshipsOnly(['profile'])
+            const serializedUser = JAOResource.create('users')
+                .attributes(['email'])
+                .relationships(['profile'])
                 .serialize(user);
 
             expect(serializedUser).to.deep.equal({

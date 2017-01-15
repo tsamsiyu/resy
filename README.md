@@ -35,5 +35,5 @@ const spec = new JAOSpec('users', {
     relationships: ['profile'] // at now profile serializer expects id named "id", read below to see how to fix it
 });
 
-spec.serialize();
+spec.serialize(user);
 ```
