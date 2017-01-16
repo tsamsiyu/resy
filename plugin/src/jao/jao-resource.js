@@ -4,7 +4,7 @@ import JAO from 'jao/jao';
 import JAOSpec from 'jao/jao-spec';
 
 /**
- * TODO: the purpose and name of this class should be revised
+ * TODO: maybe should be renamed to JAOSerializer
  *
  * @param {JAOSpec} spec The list of instructions to serialize object
  * @param {ResourceManager|null} manager Resource manager that have information about other resources
@@ -47,28 +47,28 @@ JAOResource.prototype.buildSpecHash = function () {
 
 JAOResource.prototype.attributes = function (list, cb) {
     if (typeof cb !== 'function' || cb.call()) {
-        this._attributes = list;
+        this._attributes = list instanceof Array ? list : [list];
     }
     return this;
 };
 
 JAOResource.prototype.relationships = function (list, cb) {
     if (typeof cb !== 'function' || cb.call()) {
-        this._relationships = list;
+        this._relationships = list instanceof Array ? list : [list];
     }
     return this;
 };
 
 JAOResource.prototype.include = function (list, cb) {
     if (typeof cb !== 'function' || cb.call()) {
-        this._included = list;
+        this._included = list instanceof Array ? list : [list];
     }
     return this;
 };
 
 JAOResource.prototype.ignore = function (list, cb) {
     if (typeof cb !== 'function' || cb.call()) {
-        this._ignored = list;
+        this._ignored = list instanceof Array ? list : [list];
     }
     return this;
 };
@@ -84,9 +84,20 @@ JAOResource.prototype.serialize = function (mock) {
 };
 
 JAOResource.prototype.formatRelationships = function (relationshipsIndexes) {
-    return hashedMap(relationshipsIndexes, (item, key) => {
-        return [key, {data: item}]
+    return hashedMap(relationshipsIndexes, (item, name) => {
+        return [name, {data: item}]
     });
+};
+
+JAOResource.prototype.formatIncluded = function (included) {
+    return _(included).values().flatten().map((item) => {
+        if (_.isObject(item.relationships) && !_.isEmpty(item.relationships)) {
+            item.relationships = this.formatRelationships(item.relationships);
+        } else {
+            delete item.relationships;
+        }
+        return item;
+    }).value();
 };
 
 JAOResource.prototype.serializeSingle = function (mock) {
@@ -96,20 +107,15 @@ JAOResource.prototype.serializeSingle = function (mock) {
     plainJao.data.type = picker.getType();
     plainJao.data.attributes = picker.getAttributes();
     const relationships = picker.getRelationshipsIndexes();
-    if (_.isObjectLike(relationships) && !_.isEmpty(relationships)) {
+    const included = picker.getIncluded();
+    if (_.isObject(relationships) && !_.isEmpty(relationships)) {
         plainJao.data.relationships = this.formatRelationships(relationships);
     }
-    // if (_.isArray(this.included)) { // TODO: need to move it into JAOPicker
-    //     this.included.forEach((relName) => {
-    //         const relMock = _.get(mock, relName);
-    //         if (relMock) {
-    //             const relType = picker.getRelationshipType(relName);
-    //             const relSpec = this.manager.getSpec(relType);
-    //             const relPlainObject = relSpec.serialize(relMock);
-    //             plainJao.included.push(relPlainObject);
-    //         }
-    //     });
-    // }
+    if (_.isObject(included) && !_.isEmpty(included)) {
+        plainJao.included = this.formatIncluded(included);
+    } else {
+        delete plainJao.included;
+    }
     return new JAO(plainJao);
 };
 

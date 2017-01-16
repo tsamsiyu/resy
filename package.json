@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "",
   "main": "index.js",
+  "keywords": [
+    "json:api",
+    "resource"
+  ],
   "scripts": {
     "build": "babel ./plugin -d ./build",
     "test": "npm run build && NODE_PATH=./build/src:./ mocha build/tests"

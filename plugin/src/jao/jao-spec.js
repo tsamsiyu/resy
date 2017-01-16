@@ -11,8 +11,8 @@ export default function JAOSpec(type, specHash = null) {
     this.id = get(specHash, 'id', 'id');
     this.attributes = get(specHash, 'attributes', null); // null allows all the attributes
     this.relationships = get(specHash, 'relationships', null); // null allows all the relationships
+    this.included = get(specHash, 'included', null); // null allows all the included
     this.insideSpecs = get(specHash, 'insideSpecs', null);
-    this.included = get(specHash, 'included', []);
     this.ignored = get(specHash, 'ignored', []);
 }
 
@@ -50,11 +50,24 @@ JAOSpec.prototype.isEmpty = function () {
 };
 
 JAOSpec.prototype.getAttributes = function () {
-    return difference(this.attributes, this.ignored);
+    if (this.attributes) {
+        return difference(this.attributes, this.ignored);
+    }
+    return null;
 };
 
 JAOSpec.prototype.getRelationships = function () {
-    return difference(this.relationships, this.ignored);
+    if (this.relationships) {
+        return difference(this.relationships, this.ignored);
+    }
+    return null;
+};
+
+JAOSpec.prototype.getIncluded = function () {
+    if (this.included) {
+        return difference(this.included, this.ignored);
+    }
+    return null;
 };
 
 JAOSpec.prototype.isIgnored = function (key) {

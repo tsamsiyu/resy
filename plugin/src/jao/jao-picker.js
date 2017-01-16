@@ -72,7 +72,7 @@ JAOPicker.prototype.getRelationshipSpec = function (relName) {
     } else {
         const specType = typeof relSpec;
         if (relSpec instanceof JAOSpec) {
-            return relSpec.type;
+            return relSpec;
         } else if (specType === 'string') {
             return this.provideRelationshipSpec(relName, relSpec);
         } else {
@@ -105,6 +105,7 @@ JAOPicker.prototype.createEmptySpec = function (type) {
 /**
  * @param {String} relName
  * @param {Object} element
+ * @return {JAOPicker}
  */
 JAOPicker.prototype.getElementPicker = function (relName, element) {
     const relSpec = this.getRelationshipSpec(relName);
@@ -162,19 +163,72 @@ JAOPicker.prototype.getRelationshipIndex = function (relName) {
 };
 
 JAOPicker.prototype.getRelationshipsIndexes = function () {
-    const relNames = this.spec.relationships;
-    if (_.isArray(relNames)) {
-        return hashedMap(relNames, (relName) => {
-            const relValue = this.getRelationshipIndex(relName);
-            if (relValue) {
-                return [relName, relValue];
+    if (_.isArray(this.spec.relationships)) {
+        const relationships = this.spec.getRelationships();
+        if (relationships.length) {
+            return hashedMap(relationships, (relName) => {
+                const relValue = this.getRelationshipIndex(relName);
+                if (relValue) {
+                    return [relName, relValue];
+                }
+            });
+        }
+    } else {
+        return hashedMap(this.mock, (value, name) => {
+            if (!this.spec.isIgnored(name)) {
+                const relValue = this.getElementIndex(name, value);
+                if (relValue) {
+                    return [name, relValue];
+                }
             }
         });
+    }
+};
+
+JAOPicker.prototype.getIncludedElement = function (relName, relObject) {
+    const relPicker = this.getElementPicker(relName, relObject);
+    if (relPicker.isValid()) {
+        return {
+            id: relPicker.getId(),
+            type: relPicker.getType(),
+            attributes: relPicker.getAttributes(),
+            relationships: relPicker.getRelationshipsIndexes()
+        };
+    }
+};
+
+JAOPicker.prototype.getIncludedItem = function (relName, rel) {
+    if (_.isArray(rel)) {
+        const includedRelItems = definedMap(rel, (relItem) => {
+            return this.getIncludedElement(relName, relItem);
+        });
+        if (includedRelItems.length === _.size(rel)) {
+            return includedRelItems;
+        }
+    } else if (_.isObject(rel)) {
+        return this.getIncludedElement(relName, rel);
+    }
+};
+
+JAOPicker.prototype.getIncluded = function () {
+    if (_.isArray(this.spec.included)) {
+        const includeds = this.spec.getIncluded();
+        if (includeds.length) {
+            return hashedMap(includeds, (relName) => {
+                const rel = _.get(this.mock, relName);
+                const included = this.getIncludedItem(relName, rel);
+                if (included) {
+                    return [relName, included];
+                }
+            });
+        }
     } else {
-        return hashedMap(this.mock, (value, relName) => {
-            const relValue = this.getElementIndex(relName, value);
-            if (relValue) {
-                return [relName, relValue];
+        return hashedMap(this.mock, (value, name) => {
+            if (!this.spec.isIgnored(name)) {
+                const included = this.getIncludedItem(name, value);
+                if (included) {
+                    return [name, included];
+                }
             }
         });
     }

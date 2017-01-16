@@ -1,4 +1,5 @@
 import chai from 'chai';
+import _ from 'lodash';
 import {generateUser, generateProfile, generatePost} from './factories';
 
 import JAOResource from 'jao/jao-resource';
@@ -11,7 +12,9 @@ describe("JAOResource", () => {
             const user = generateUser();
             user.profile = generateProfile();
             user.posts = [generatePost(), generatePost()];
-            const serializedUser = JAOResource.create('users').serialize(user);
+            const serializedUser = JAOResource.create('users')
+                .include([])
+                .serialize(user);
             expect(serializedUser).to.deep.equal({
                 data: {
                     id: user.id,
@@ -57,7 +60,9 @@ describe("JAOResource", () => {
         it("should not serialize embed collection if at least one of them is invalid", () => {
             const user = generateUser();
             user.posts = [generatePost(), generatePost(), 7];
-            const serializedUser = JAOResource.create('users').serialize(user);
+            const serializedUser = JAOResource.create('users')
+                .include([])
+                .serialize(user);
             expect(serializedUser).to.deep.equal({
                 data: {
                     id: user.id,
@@ -70,11 +75,12 @@ describe("JAOResource", () => {
             });
         });
 
-        it("should take specified [attributes, relationships, included, id] into account", () => {
+        it("`attributes, relationships, id` functions of jao-resource should work", () => {
             const user = generateUser();
             user.profile = generateProfile();
             user.posts = [generatePost()];
             const serializedUser = JAOResource.create('users')
+                .include([])
                 .attributes(['email'])
                 .relationships(['profile'])
                 .serialize(user);
@@ -97,5 +103,86 @@ describe("JAOResource", () => {
                 }
             });
         });
+
+        it("`ignore` function of jao-resource should work", () => {
+            const user = generateUser();
+            user.profile = generateProfile();
+            user.posts = [generatePost()];
+            const serializedUser = JAOResource.create('users')
+                .include([])
+                .ignore(['authKey', 'passwordHash', 'posts'])
+                .serialize(user);
+
+            expect(serializedUser).to.deep.equal({
+                data: {
+                    id: user.id,
+                    type: 'users',
+                    attributes: {
+                        email: user.email,
+                    },
+                    relationships: {
+                        profile: {
+                            data: {
+                                id: user.profile.id,
+                                type: 'profile'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+        it("`included` function of jao-resource should work", () => {
+            const user = generateUser();
+            user.profile = generateProfile();
+            user.posts = [generatePost()];
+            const serializedUser = JAOResource.create('users').serialize(user);
+
+            expect(serializedUser).to.deep.equal({
+                data: {
+                    id: user.id,
+                    type: 'users',
+                    attributes: {
+                        email: user.email,
+                        passwordHash: user.passwordHash
+                    },
+                    relationships: {
+                        profile: {
+                            data: {
+                                id: user.profile.id,
+                                type: 'profile'
+                            }
+                        },
+                        posts: {
+                            data: user.posts.map((post) => {
+                                return {
+                                    id: post.id,
+                                    type: 'posts'
+                                }
+                            })
+                        }
+                    }
+                },
+                included: _.concat([
+                    {
+                        type: 'profile',
+                        id: user.profile.id,
+                        attributes: {
+                            name: user.profile.name,
+                            surname: user.profile.surname
+                        }
+                    }
+                ], _.map(user.posts, (post) => {
+                    return {
+                        id: post.id,
+                        type: 'posts',
+                        attributes: {
+                            title: post.title,
+                        }
+                    };
+                }))
+            });
+        });
+
     });
 });

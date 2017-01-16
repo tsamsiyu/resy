@@ -6,6 +6,9 @@
  */
 export default function JAO(jaoPlainObject) {
     this.data = jaoPlainObject.data;
+    if (jaoPlainObject.included) {
+        this.included = jaoPlainObject.included;
+    }
 }
 
 export function JAOData() {
