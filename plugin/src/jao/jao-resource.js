@@ -13,6 +13,7 @@ import JAOSpec from 'jao/jao-spec';
 export default function JAOResource(spec, manager = null) {
     this.manager = manager;
     this.spec = spec;
+    this._insideSpecs = {};
 }
 
 /**
@@ -42,6 +43,7 @@ JAOResource.prototype.buildSpecHash = function () {
     specHash.relationships = this._relationships || this.spec.relationships;
     specHash.included = this._included || this.spec.included;
     specHash.ignored = this._ignored || this.spec.ignored;
+    specHash.insideSpecs = this._insideSpecs || this.spec.insideSpecs;
     return specHash;
 };
 
@@ -87,6 +89,15 @@ JAOResource.prototype.formatRelationships = function (relationshipsIndexes) {
     return hashedMap(relationshipsIndexes, (item, name) => {
         return [name, {data: item}]
     });
+};
+
+JAOResource.prototype.insideSpecs = function (hash, cb) {
+    if (typeof cb !== 'function' || cb.call()) {
+        _.forEach(hash, (item, key) => {
+            this._insideSpecs[key] = JAOSpec.inspect(item, key);
+        });
+    }
+    return this;
 };
 
 JAOResource.prototype.formatIncluded = function (included) {

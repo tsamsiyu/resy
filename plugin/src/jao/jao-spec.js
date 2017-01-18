@@ -34,6 +34,22 @@ JAOSpec.createPicker = function (mock, spec, manager = null) {
     return new JAOPicker(mock, spec, manager);
 };
 
+JAOSpec.inspect = function (specHash, key) {
+    if (specHash instanceof JAOSpec) {
+        return specHash;
+    } else if (typeof specHash === 'object') {
+        if (specHash.type) {
+            return this.create(specHash);
+        } else {
+            return new this(key, specHash);
+        }
+    } else if (typeof specHash === 'string') {
+        return specHash;
+    } else {
+        throw Error('Unexpected spec was passed');
+    }
+};
+
 JAOSpec.prototype.createPicker = function (mock, manager = null) {
     return this.constructor.createPicker(mock, this, manager)
 };

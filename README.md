@@ -12,7 +12,7 @@ Resource management with json-api implementation
 
 - without spec
 ```js
-(new JAOSpec).serialize(user);
+JAOResource.create('users').serialize(user);
 ```
 - with spec
 ```js
@@ -29,7 +29,7 @@ const user = {
     }
 };
 
-const spec = new JAOSpec('users', {
+const spec = JAOResource.create('users', {
     id: '_id',
     attributes: ['email', 'login', 'role'],
     relationships: ['profile'] // at now profile serializer expects id named "id", read below to see how to fix it

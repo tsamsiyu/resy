@@ -3,6 +3,7 @@ import _ from 'lodash';
 import {generateUser, generateProfile, generatePost} from './factories';
 
 import JAOResource from 'jao/jao-resource';
+import JAOSpec from 'jao/jao-spec';
 
 const expect = chai.expect;
 
@@ -184,5 +185,79 @@ describe("JAOResource", () => {
             });
         });
 
+        it("hash in `insideSpecs` function should be used as relationship spec", () => {
+            const user = generateUser();
+            user.profile = generateProfile();
+            const serializedUser = JAOResource.create('users')
+                .insideSpecs({profile: {
+                    attributes: ['name']
+                }})
+                .serialize(user);
+
+            expect(serializedUser).to.deep.equal({
+                data: {
+                    id: user.id,
+                    type: 'users',
+                    attributes: {
+                        email: user.email,
+                        passwordHash: user.passwordHash
+                    },
+                    relationships: {
+                        profile: {
+                            data: {
+                                id: user.profile.id,
+                                type: 'profile'
+                            }
+                        },
+                    },
+                },
+                included: [
+                    {
+                        type: 'profile',
+                        id: user.profile.id,
+                        attributes: {
+                            name: user.profile.name
+                        }
+                    }
+                ]
+            });
+        });
+
+        it("string in `insideSpecs` function should be used as type if resource-manager is not specified", () => {
+            const user = generateUser();
+            user.profile = generateProfile();
+            const serializedUser = JAOResource.create('users')
+                .insideSpecs({profile: 'userinfo'})
+                .serialize(user);
+
+            expect(serializedUser).to.deep.equal({
+                data: {
+                    id: user.id,
+                    type: 'users',
+                    attributes: {
+                        email: user.email,
+                        passwordHash: user.passwordHash
+                    },
+                    relationships: {
+                        profile: {
+                            data: {
+                                id: user.profile.id,
+                                type: 'userinfo'
+                            }
+                        },
+                    },
+                },
+                included: [
+                    {
+                        type: 'userinfo',
+                        id: user.profile.id,
+                        attributes: {
+                            name: user.profile.name,
+                            surname: user.profile.surname
+                        }
+                    }
+                ]
+            });
+        });
     });
 });
