@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import JAOSpec from 'jao/jao-spec';
 import ResourceManager from 'resource-manager';
-import {definedMap, hashedMap, isScalar} from 'helpers';
+import {definedMap, hashedMap, isScalar, forHashMap} from 'helpers';
 
 /**
  * @param {Object} mock Data to pick from
@@ -192,7 +192,8 @@ JAOPicker.prototype.getIncludedElement = function (relName, relObject) {
             id: relPicker.getId(),
             type: relPicker.getType(),
             attributes: relPicker.getAttributes(),
-            relationships: relPicker.getRelationshipsIndexes()
+            relationships: relPicker.getRelationshipsIndexes(),
+            included: relPicker.getIncluded()
         };
     }
 };
@@ -215,7 +216,7 @@ JAOPicker.prototype.getIncluded = function () {
         const includeds = this.spec.getIncluded();
         if (includeds.length) {
             return hashedMap(includeds, (relName) => {
-                const rel = _.get(this.mock, relName);
+                const rel = _.get(this.mock, relName); // TODO: it is impossible to get pluralized relationship like 'friends.posts`
                 const included = this.getIncludedItem(relName, rel);
                 if (included) {
                     return [relName, included];
@@ -223,11 +224,29 @@ JAOPicker.prototype.getIncluded = function () {
             });
         }
     } else {
-        return hashedMap(this.mock, (value, name) => {
-            if (!this.spec.isIgnored(name)) {
+        return forHashMap(this.mock, (value, name, hash) => {
+            if (!this.spec.isIgnored(name) && !this.spec.isId(name)) {
                 const included = this.getIncludedItem(name, value);
                 if (included) {
-                    return [name, included];
+                    // TODO: need refactoring
+                    if (!_.isArray(included)) {
+                        if (included.included) {
+                            _.forEach(included.included, (includedItem, includedName) => {
+                                hash[`${name}.${includedName}`] = includedItem;
+                            });
+                        }
+                        delete included.included;
+                    } else {
+                        _.forEach(included, (includedObject, k) => {
+                            if (includedObject.included) {
+                                _.forEach(includedObject.included, (includedItem, includedName) => {
+                                    hash[`${name}.${includedName}`] = includedItem;
+                                });
+                                delete includedObject.included;
+                            }
+                        })
+                    }
+                    hash[name] = included;
                 }
             }
         });

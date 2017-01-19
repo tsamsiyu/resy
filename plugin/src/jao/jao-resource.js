@@ -47,6 +47,11 @@ JAOResource.prototype.buildSpecHash = function () {
     return specHash;
 };
 
+JAOResource.prototype.id = function (name) {
+    this._id = name;
+    return this;
+};
+
 JAOResource.prototype.attributes = function (list, cb) {
     if (typeof cb !== 'function' || cb.call()) {
         this._attributes = list instanceof Array ? list : [list];

@@ -32,3 +32,19 @@ export function isScalar(value) {
     const valueType = typeof value;
     return valueType === 'string' || valueType === 'number';
 }
+
+export function forMap(ary, cb) {
+    const map = [];
+    _.forEach(ary, (item, key) => {
+        cb.call(null, item, key, map);
+    });
+    return map;
+}
+
+export function forHashMap(ary, cb) {
+    const map = {};
+    _.forEach(ary, (item, key) => {
+        cb.call(null, item, key, map);
+    });
+    return map;
+}
