@@ -29,9 +29,9 @@ JAOResource.create = function (type, specHash, manager) {
     return new this(spec, manager);
 };
 
-JAOResource.prototype.getPicker = function (mock) {
+JAOResource.prototype.getPicker = function (mock, options) {
     const specHash = this.buildSpecHash();
-    return JAOSpec.create(specHash).createPicker(mock, this.manager);
+    return JAOSpec.create(specHash).createPicker(mock, this.manager, options);
 };
 
 JAOResource.prototype.buildSpecHash = function () {
@@ -80,11 +80,11 @@ JAOResource.prototype.ignore = function (list, cb) {
     return this;
 };
 
-JAOResource.prototype.serialize = function (mock) {
+JAOResource.prototype.serialize = function (mock, options) {
     if (_.isArray(mock)) {
-        return this.serializeCollection(mock);
+        return this.serializeCollection(mock, options);
     } else if (_.isObjectLike(mock)) {
-        return this.serializeSingle(mock);
+        return this.serializeSingle(mock, options);
     } else {
         throw new Error('Passed unsupported type for serialization');
     }
@@ -96,6 +96,12 @@ JAOResource.prototype.formatRelationships = function (relationshipsIndexes) {
     });
 };
 
+/**
+ * TODO: need rename
+ * @param hash
+ * @param cb
+ * @returns {JAOResource}
+ */
 JAOResource.prototype.insideSpecs = function (hash, cb) {
     if (typeof cb !== 'function' || cb.call()) {
         _.forEach(hash, (item, key) => {
@@ -116,8 +122,8 @@ JAOResource.prototype.formatIncluded = function (included) {
     }).value();
 };
 
-JAOResource.prototype.serializeSingle = function (mock) {
-    const picker = this.getPicker(mock);
+JAOResource.prototype.serializeSinglePlain = function (mock, options) {
+    const picker = this.getPicker(mock, options);
     const plainJao = {data: {}, included: []};
     plainJao.data.id = picker.getId();
     plainJao.data.type = picker.getType();
@@ -132,9 +138,30 @@ JAOResource.prototype.serializeSingle = function (mock) {
     } else {
         delete plainJao.included;
     }
-    return new JAO(plainJao);
+    return plainJao;
 };
 
-JAOResource.prototype.serializeCollection = function (mocks) {
+JAOResource.prototype.serializeCollectionPlain = function (mocks, options) {
+    const plainJaoCollection = {data: [], included: []};
+    mocks.forEach((mock) => {
+        const plainJao = this.serializeSinglePlain(mock, options);
+        plainJaoCollection.data.push(plainJao.data);
+        plainJaoCollection.included = plainJaoCollection.included.concat(plainJao.included);
+    });
+    if (!plainJaoCollection.included.length) {
+        delete plainJaoCollection.included;
+    }
+    return plainJaoCollection;
 };
 
+JAOResource.prototype.serializeSingle = function (mock, options) {
+    return new JAO(this.serializeSinglePlain(mock, options));
+};
+
+JAOResource.prototype.serializeCollection = function (mocks, options) {
+    return new JAO(this.serializeCollectionPlain(mocks, options));
+};
+
+JAOResource.prototype.addMeta = function (key, value) {
+
+};

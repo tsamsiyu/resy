@@ -2,6 +2,27 @@ import get from 'lodash/get';
 import difference from 'lodash/difference';
 import JAOPicker from 'jao/jao-picker';
 
+const getArray = function (obj, key, def = null) {
+    let res = get(obj, key, def);
+    if (typeof res === 'string') {
+        res = [res];
+    }
+    return res;
+};
+
+/**
+ *
+ * @param type
+ * @param specHash
+ * @constructor
+ * @property {String} id
+ * @property {String} type
+ * @property {Array} attributes
+ * @property {Array} relationships
+ * @property {Array} included
+ * @property {Array} ignored
+ * @property {Object} insideSpecs
+ */
 export default function JAOSpec(type, specHash = null) {
     if (typeof type !== 'string') {
         throw new Error('Type of jao spec must be a string');
@@ -9,11 +30,11 @@ export default function JAOSpec(type, specHash = null) {
     this.type = type;
     this.originalSpec = specHash;
     this.id = get(specHash, 'id', 'id');
-    this.attributes = get(specHash, 'attributes', null); // null allows all the attributes
-    this.relationships = get(specHash, 'relationships', null); // null allows all the relationships
-    this.included = get(specHash, 'included', null); // null allows all the included
+    this.attributes = getArray(specHash, 'attributes', null); // null allows all the attributes
+    this.relationships = getArray(specHash, 'relationships', null); // null allows all the relationships
+    this.included = getArray(specHash, 'included', null); // null allows all the included
+    this.ignored = getArray(specHash, 'ignored', []);
     this.insideSpecs = get(specHash, 'insideSpecs', null);
-    this.ignored = get(specHash, 'ignored', []);
 }
 
 /**
@@ -30,8 +51,8 @@ JAOSpec.create = function (spec) {
  * Bind particular picker to spec
  * @returns {JAOPicker}
  */
-JAOSpec.createPicker = function (mock, spec, manager = null) {
-    return new JAOPicker(mock, spec, manager);
+JAOSpec.createPicker = function (mock, spec, manager = null, options) {
+    return new JAOPicker(mock, spec, manager, options);
 };
 
 JAOSpec.inspect = function (specHash, key) {
@@ -50,8 +71,8 @@ JAOSpec.inspect = function (specHash, key) {
     }
 };
 
-JAOSpec.prototype.createPicker = function (mock, manager = null) {
-    return this.constructor.createPicker(mock, this, manager)
+JAOSpec.prototype.createPicker = function (mock, manager = null, options) {
+    return this.constructor.createPicker(mock, this, manager, options)
 };
 
 JAOSpec.prototype.isEmpty = function () {

@@ -7,7 +7,7 @@ import {definedMap, hashedMap, isScalar, forHashMap} from 'helpers';
  * @param {Object} mock Data to pick from
  * @param {JAOSpec} spec Instructions to pick data
  * @param {ResourceManager|null} manager
- * @param options
+ * @param {Object|null} options
  * @constructor
  */
 export default function JAOPicker(mock, spec, manager = null, options = null) {
@@ -17,9 +17,9 @@ export default function JAOPicker(mock, spec, manager = null, options = null) {
     this.options = options;
 }
 
-JAOPicker.create = function (mock, type, specHash = null, manager = null) {
+JAOPicker.create = function (mock, type, specHash = null, manager = null, options) {
     const spec = new JAOSpec(type, specHash);
-    return new this(mock, spec, manager);
+    return new this(mock, spec, manager, options);
 };
 
 JAOPicker.prototype.isValid = function () {
@@ -87,9 +87,9 @@ JAOPicker.prototype.provideRelationshipSpec = function (relName, relType) {
             return this.manager.getSpec(relType);
         } else {
             const managerStoreOnly = _.get(this.options, 'managerStoreOnly', undefined);
-            if (managerStoreOnly === true || managerStoreOnly === undefined) {
+            if (managerStoreOnly === undefined) {
                 throw new Error(`Spec '${relType}' was not found for '${relName}' relationship`);
-            } else {
+            } else if (managerStoreOnly === false) {
                 return this.createEmptySpec(relType);
             }
         }
@@ -109,7 +109,9 @@ JAOPicker.prototype.createEmptySpec = function (type) {
  */
 JAOPicker.prototype.getElementPicker = function (relName, element) {
     const relSpec = this.getRelationshipSpec(relName);
-    return relSpec.createPicker(element, this.manager);
+    if (relSpec) {
+        return relSpec.createPicker(element, this.manager);
+    }
 };
 
 JAOPicker.prototype.getType = function () {
@@ -135,7 +137,7 @@ JAOPicker.prototype.getAttributes = function () {
 JAOPicker.prototype.getElementObjectIndex = function (name, value) {
     if (_.isObjectLike(value)) {
         const relPicker = this.getElementPicker(name, value);
-        if (relPicker.isValid()) {
+        if (relPicker && relPicker.isValid()) {
             return {
                 type: relPicker.getType(),
                 id: relPicker.getId()
@@ -185,67 +187,100 @@ JAOPicker.prototype.getRelationshipsIndexes = function () {
     }
 };
 
-JAOPicker.prototype.getIncludedElement = function (relName, relObject) {
+JAOPicker.prototype.getIncludedForObject = function (relName, relObject) {
     const relPicker = this.getElementPicker(relName, relObject);
-    if (relPicker.isValid()) {
-        return {
+    if (relPicker && relPicker.isValid()) {
+        const includedElement = {
             id: relPicker.getId(),
             type: relPicker.getType(),
             attributes: relPicker.getAttributes(),
-            relationships: relPicker.getRelationshipsIndexes(),
-            included: relPicker.getIncluded()
         };
+        const rels = relPicker.getRelationshipsIndexes();
+        if (_.size(rels)) {
+            includedElement.relationships = rels;
+            const inclds = relPicker.getIncluded();
+            if (_.size(inclds)) {
+                includedElement.included = inclds;
+            }
+        }
+        return includedElement;
     }
 };
 
-JAOPicker.prototype.getIncludedItem = function (relName, rel) {
+JAOPicker.prototype.getIncludedForElement = function (relName, rel) {
     if (_.isArray(rel)) {
         const includedRelItems = definedMap(rel, (relItem) => {
-            return this.getIncludedElement(relName, relItem);
+            return this.getIncludedForObject(relName, relItem);
         });
         if (includedRelItems.length === _.size(rel)) {
             return includedRelItems;
         }
     } else if (_.isObject(rel)) {
-        return this.getIncludedElement(relName, rel);
+        return this.getIncludedForObject(relName, rel);
     }
+};
+
+JAOPicker.prototype.getIncludedForRelationship = function (name) {
+    const value = _.get(this.mock, name);
+    return this.getIncludedForElement(name, value);
+};
+
+JAOPicker.prototype.flattenIncludedTree = function (includedElement, cb) {
+    const flattenedIncludeds = {};
+    if (_.isArray(includedElement)) {
+        _.forEach(includedElement, (includedObject) => {
+            _.forEach(includedObject.included, (childIncludedItem, childIncludedName) => {
+                let flattenchild = flattenedIncludeds[childIncludedName];
+                if (flattenchild) {
+                    if (!_.isArray(flattenchild)) {
+                        flattenchild = [flattenchild];
+                    }
+                    if (_.isArray(childIncludedItem)) {
+                        flattenchild = flattenchild.concat(childIncludedItem);
+                    } else {
+                        flattenchild.push(childIncludedItem);
+                    }
+                } else {
+                    flattenchild = childIncludedItem;
+                }
+                flattenedIncludeds[childIncludedName] = flattenchild;
+            });
+            delete includedObject.included;
+        });
+        return flattenedIncludeds;
+    } else {
+        _.assign(flattenedIncludeds, includedElement.included);
+        delete includedElement.included;
+    }
+    return flattenedIncludeds;
 };
 
 JAOPicker.prototype.getIncluded = function () {
     if (_.isArray(this.spec.included)) {
         const includeds = this.spec.getIncluded();
         if (includeds.length) {
-            return hashedMap(includeds, (relName) => {
-                const rel = _.get(this.mock, relName); // TODO: it is impossible to get pluralized relationship like 'friends.posts`
-                const included = this.getIncludedItem(relName, rel);
+            return forHashMap(includeds, (name, i, hash) => {
+                const included = this.getIncludedForRelationship(name);
                 if (included) {
-                    return [relName, included];
+                    const flattenedChilds = this.flattenIncludedTree(included);
+                    _.forEach(flattenedChilds, (flattenedChildItem, flattenedChildName) => {
+                        const childRelName = `${name}.${flattenedChildName}`;
+                        hash[childRelName] = flattenedChildItem;
+                    });
+                    hash[name] = included;
                 }
             });
         }
     } else {
         return forHashMap(this.mock, (value, name, hash) => {
             if (!this.spec.isIgnored(name) && !this.spec.isId(name)) {
-                const included = this.getIncludedItem(name, value);
+                const included = this.getIncludedForElement(name, value);
                 if (included) {
-                    // TODO: need refactoring
-                    if (!_.isArray(included)) {
-                        if (included.included) {
-                            _.forEach(included.included, (includedItem, includedName) => {
-                                hash[`${name}.${includedName}`] = includedItem;
-                            });
-                        }
-                        delete included.included;
-                    } else {
-                        _.forEach(included, (includedObject, k) => {
-                            if (includedObject.included) {
-                                _.forEach(includedObject.included, (includedItem, includedName) => {
-                                    hash[`${name}.${includedName}`] = includedItem;
-                                });
-                                delete includedObject.included;
-                            }
-                        })
-                    }
+                    const flattenedChilds = this.flattenIncludedTree(included);
+                    _.forEach(flattenedChilds, (flattenedChildItem, flattenedChildName) => {
+                        const childRelName = `${name}.${flattenedChildName}`;
+                        hash[childRelName] = flattenedChildItem;
+                    });
                     hash[name] = included;
                 }
             }
